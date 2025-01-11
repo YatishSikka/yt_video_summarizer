@@ -24,6 +24,7 @@ YouTube Video Summarizer, is a powerful and customizable tool at your disposal, 
 1. Python 3.8+ installed.
 2. A CUDA-compatible GPU (optional but recommended for faster inference).
 3. Required libraries installed.
+4. Make sure to add FFmpeg to your PATH (for Windows).
 
 ---
 

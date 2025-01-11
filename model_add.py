@@ -140,5 +140,4 @@ class LlamaCPPInvocationLayer(PromptModelInvocationLayer):
         if the model is supported.
         :return: True if this invocation layer supports the model, False otherwise.
         """
-        #I guess there is not much to validate here ¯\_(ツ)_/¯
         return model_name_or_path is not None and len(model_name_or_path) > 0
