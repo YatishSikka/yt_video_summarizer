@@ -1,0 +1,107 @@
+import streamlit as st
+from haystack.nodes import PromptNode, PromptModel
+from haystack.nodes.audio import WhisperTranscriber
+from haystack.pipelines import Pipeline
+from model_add import LlamaCPPInvocationLayer
+import time
+import yt_dlp
+
+st.set_page_config(
+    layout="wide"
+)
+
+def download_video(url):
+    try:
+        # Options for yt-dlp
+        ydl_opts = {
+            'format': 'bestaudio/best',  # Download the best available audio
+            'outtmpl': '%(title)s.%(ext)s',  # Save the file with the video title as the name
+            'postprocessors': [{  # Convert to MP3 (optional)
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',  # Adjust quality as needed
+            }],
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Download and get the information dictionary
+            info_dict = ydl.extract_info(url, download=True)
+            # Get the path of the downloaded file
+            file_path = ydl.prepare_filename(info_dict)
+            # If postprocessing (e.g., conversion to MP3) happens, adjust the file path
+            if 'ext' in info_dict and info_dict['ext'] == 'webm':
+                file_path = file_path.replace('.webm', '.mp3')
+            elif 'ext' in info_dict and info_dict['ext'] == 'mp4':
+                file_path = file_path.replace('.mp4', '.mp3')
+            return file_path
+    except Exception as e:
+        print(f"Error downloading video: {e}")
+        return None
+
+def initialize_model(full_path):
+    return PromptModel(
+        model_name_or_path=full_path,
+        invocation_layer_class=LlamaCPPInvocationLayer,
+        use_gpu=False,
+        max_length=512
+    )
+
+def initialize_prompt_node(model):
+    summary_prompt = "deepset/summarization"
+    return PromptNode(model_name_or_path=model, default_prompt_template=summary_prompt, use_gpu=False)
+
+def transcribe_audio(file_path, prompt_node):
+    whisper = WhisperTranscriber()
+    pipeline = Pipeline()
+    pipeline.add_node(component=whisper, name="whisper", inputs=["File"])
+    pipeline.add_node(component=prompt_node, name="prompt", inputs=["whisper"])
+    output = pipeline.run(file_paths=[file_path])
+    return output
+
+def main():
+
+    # Set the title and background color
+    st.title("YouTube Video Summarizer")
+    st.markdown('<style>h1{color: orange; text-align: center;}</style>', unsafe_allow_html=True)
+    st.subheader('Built with Llama 2, Haystack and Streamlit')
+    st.markdown('<style>h3{color: pink;  text-align: center;}</style>', unsafe_allow_html=True)
+
+    # Expander for app details
+    with st.expander("About the App"):
+        st.write("This app allows you to summarize while watching a YouTube video.")
+        st.write("Enter a YouTube URL in the input box below and click 'Submit' to start.")
+
+    # Input box for YouTube URL
+    youtube_url = st.text_input("Enter YouTube URL")
+
+    # Submit button
+    if st.button("Submit") and youtube_url:
+        start_time = time.time()  # Start the timer
+        # Download video
+        file_path = download_video(youtube_url)
+
+        # Initialize model
+        full_path = "llama-2-7b-32k-instruct.Q4_K_S.gguf"
+        model = initialize_model(full_path)
+        prompt_node = prompt_node = initialize_prompt_node(model)
+        # Transcribe audio
+        output = transcribe_audio(file_path, prompt_node)
+
+        end_time = time.time()  # End the timer
+        elapsed_time = end_time - start_time
+
+        # Display layout with 2 columns
+        col1, col2 = st.columns([1,1])
+
+        # Column 1: Video view
+        with col1:
+            st.video(youtube_url)
+
+        # Column 2: Summary View
+        with col2:
+            st.header("Summarization of YouTube Video")
+            st.success(output["results"][0].split("\n\n[INST]")[0])
+            st.write(f"Time taken: {elapsed_time:.2f} seconds")
+
+if __name__ == "__main__":
+    main()
